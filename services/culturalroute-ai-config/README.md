@@ -1,0 +1,1 @@
+# culturalroute-ai-config
