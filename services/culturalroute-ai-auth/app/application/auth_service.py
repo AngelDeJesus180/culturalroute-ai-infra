@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from app.domain.models import User
 from app.domain.repositories import UserRepository
 from app.schemas.auth import UserRegisterRequest, UserLoginRequest
+from app.infrastructure.rabbitmq import rabbitmq
 
 load_dotenv()
 
@@ -60,7 +61,24 @@ class AuthService:
             username=request.username,
             password_hash=password_hash
         )
-        return await self.user_repository.save(user)
+
+        result = await self.user_repository.save(user)
+
+        # Enviar evento a RabbitMQ (solo esto es nuevo)
+        try:
+            from app.infrastructure.rabbitmq import rabbitmq
+            from datetime import datetime
+
+            rabbitmq.publish('user_registered', {
+                'user_id': str(result.id),
+                'username': result.username,
+                'is_admin': result.is_admin,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        except Exception as e:
+            print(f"⚠️ Error enviando mensaje a RabbitMQ: {e}")
+
+        return result
 
     async def login(self, request: UserLoginRequest) -> dict:
         user = await self.user_repository.find_by_username(request.username)
